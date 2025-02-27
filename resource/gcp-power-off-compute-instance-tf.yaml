@@ -7,27 +7,59 @@
 
   vars:
     service_account_file: "{{ lookup('env', 'GOOGLE_APPLICATION_CREDENTIALS') }}"
+    has_service_account_file: "{{ service_account_file | length > 0 and service_account_file is file }}"
 
   tasks:
-    - name: Stop the GCP vm by its name
-      google.cloud.gcp_compute_instance:
-        auth_kind: serviceaccount
-        service_account_file: "{{ service_account_file }}"
-        project: "{{ project }}"
-        zone: "{{ zone }}"
-        name: "{{ name }}"
-        status: TERMINATED
-        
-    - name: gather information about the vm instance
-      google.cloud.gcp_compute_instance_info:
-        auth_kind: serviceaccount
-        service_account_file: "{{ service_account_file }}"
-        project: "{{ project }}"
-        zone: "{{ zone }}"
-        filters:
-          - "name={{ name }}"
-      register: vm_info
+    - name: Stop the GCP vm using service account file
+      when: has_service_account_file
+      block:
+        - name: Stop the GCP vm using service account file
+          google.cloud.gcp_compute_instance:
+            auth_kind: serviceaccount
+            service_account_file: "{{ service_account_file }}"
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            name: "{{ name }}"
+            status: TERMINATED
+
+        - name: gather information about the vm instance
+          google.cloud.gcp_compute_instance_info:
+            auth_kind: serviceaccount
+            service_account_file: "{{ service_account_file}}"
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            filters:
+              - "name={{ name }}"
+          register: vm_info
+          
+        - copy:
+            content: "{{ vm_info }}"
+            dest: qtorque_outputs.json
+    
+    
+    - name: Stop the GCP vm using Workload Identity Federation
+      when: not has_service_account_file
+      block:
+        - name: Stop the GCP vm using Workload Identity Federation
+          google.cloud.gcp_compute_instance:
+            auth_kind: application
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            name: "{{ name }}"
+            status: TERMINATED
+          register: result
+
+        - name: gather information about the vm instance
+          google.cloud.gcp_compute_instance_info:
+            auth_kind: application
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            filters:
+              - "name={{ name }}"
+          register: vm_info
+          
+        - copy:
+            content: "{{ vm_info }}"
+            dest: qtorque_outputs.json
+    
       
-    - copy:
-        content: "{{ vm_info }}"
-        dest: qtorque_outputs.json
