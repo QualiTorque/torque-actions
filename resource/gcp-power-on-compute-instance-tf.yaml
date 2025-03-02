@@ -7,27 +7,55 @@
 
   vars:
     service_account_file: "{{ lookup('env', 'GOOGLE_APPLICATION_CREDENTIALS') }}"
+    has_service_account_file: "{{ service_account_file | length > 0 and service_account_file is file }}"
 
   tasks:
-    - name: Start the GCP vm by its id
-      google.cloud.gcp_compute_instance:
-        auth_kind: serviceaccount
-        service_account_file: "{{ service_account_file }}"
-        project: "{{ project }}"
-        zone: "{{ zone }}"
-        name: "{{ name }}"
-        status: RUNNING
+    - name: Start the GCP vm (authenticate using GOOGLE_APPLICATION_CREDENTIALS)
+      when: has_service_account_file
+      block:
+        - name: Start the GCP vm (authenticate using GOOGLE_APPLICATION_CREDENTIALS)
+          google.cloud.gcp_compute_instance:
+            auth_kind: serviceaccount
+            service_account_file: "{{ service_account_file }}"
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            name: "{{ name }}"
+            status: RUNNING
         
-    - name: gather information about the vm instance
-      google.cloud.gcp_compute_instance_info:
-        auth_kind: serviceaccount
-        service_account_file: "{{ service_account_file }}"
-        project: "{{ project }}"
-        zone: "{{ zone }}"
-        filters:
-          - "name={{ name }}"
-      register: vm_info
-      
-    - copy:
-        content: "{{ vm_info }}"
-        dest: qtorque_outputs.json
+        - name: gather information about the vm instance
+          google.cloud.gcp_compute_instance_info:
+            auth_kind: serviceaccount
+            service_account_file: "{{ service_account_file}}"
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            filters:
+              - "name={{ name }}"
+          register: vm_info
+          
+        - copy:
+            content: "{{ vm_info }}"
+            dest: qtorque_outputs.json
+     
+    - name: Start the GCP vm (authenticate using attached google service account)
+      when: not has_service_account_file
+      block:
+        - name: Start the GCP vm (authenticate using attached google service account)
+          google.cloud.gcp_compute_instance:
+            auth_kind: application
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            name: "{{ name }}"
+            status: RUNNING
+        
+        - name: gather information about the vm instance
+          google.cloud.gcp_compute_instance_info:
+            auth_kind: application
+            project: "{{ project }}"
+            zone: "{{ zone }}"
+            filters:
+              - "name={{ name }}"
+          register: vm_info
+          
+        - copy:
+            content: "{{ vm_info }}"
+            dest: qtorque_outputs.json
